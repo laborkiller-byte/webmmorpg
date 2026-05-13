@@ -6,7 +6,6 @@ export class Player {
     this.world = world;
     this.ui = ui;
 
-    // Stats
     this.level = 1;
     this.exp   = 0;
     this.expNeeded = 100;
@@ -19,18 +18,19 @@ export class Player {
     this.spd   = 7;
     this.gold  = 0;
 
-    // Hareket
     this.targetPos  = null;
     this.moving     = false;
     this.moveSpeed  = this.spd;
-    this.target     = null; // düşman hedef
+    this.target     = null;
 
-    // Saldırı
+    // WASD tuş durumları
+    this.keys = {};
+    this._setupKeyListeners();
+
     this.attackRange    = 3.5;
     this.attackCooldown = 0;
-    this.attackRate     = 1.2; // saniyede
+    this.attackRate     = 1.2;
 
-    // Skill cooldown'ları (saniye)
     this.skills = [
       { name: 'Güçlü Vuruş', mp: 20,  cd: 5,  timer: 0, dmgMult: 2.5  },
       { name: 'Kasırga',      mp: 35,  cd: 8,  timer: 0, dmgMult: 3.0, aoe: true },
@@ -40,19 +40,32 @@ export class Player {
     ];
     this.shielded = false;
 
-    // HP regen
     this.hpRegenTimer = 0;
     this.mpRegenTimer = 0;
 
     this.mesh = null;
     this._buildMesh();
-    this._hitEffect = null;
+  }
+
+  _setupKeyListeners() {
+    document.addEventListener('keydown', e => {
+      this.keys[e.code] = true;
+      const skillMap = {
+        'Digit1': 0, 'Digit2': 1, 'Digit3': 2,
+        'Digit4': 3, 'Digit5': 4, 'Digit6': 5,
+      };
+      if (skillMap[e.code] !== undefined) {
+        this.useSkill(skillMap[e.code]);
+      }
+    });
+    document.addEventListener('keyup', e => {
+      this.keys[e.code] = false;
+    });
   }
 
   _buildMesh() {
     const g = new THREE.Group();
 
-    // Vücut
     const bodyGeo = new THREE.CapsuleGeometry(0.4, 1.0, 4, 8);
     const bodyMat = new THREE.MeshPhongMaterial({ color: 0x3355AA, shininess: 60 });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
@@ -60,7 +73,6 @@ export class Player {
     body.castShadow = true;
     g.add(body);
 
-    // Kafa
     const headGeo = new THREE.SphereGeometry(0.28, 8, 8);
     const headMat = new THREE.MeshPhongMaterial({ color: 0xFFCC99 });
     const head = new THREE.Mesh(headGeo, headMat);
@@ -68,7 +80,6 @@ export class Player {
     head.castShadow = true;
     g.add(head);
 
-    // Kılıç
     const swordGeo = new THREE.BoxGeometry(0.08, 1.2, 0.08);
     const swordMat = new THREE.MeshPhongMaterial({ color: 0xCCCCCC, shininess: 200 });
     const sword = new THREE.Mesh(swordGeo, swordMat);
@@ -78,14 +89,12 @@ export class Player {
     g.add(sword);
     this._sword = sword;
 
-    // Kalkan
     const shieldGeo = new THREE.BoxGeometry(0.5, 0.6, 0.08);
     const shieldMat = new THREE.MeshPhongMaterial({ color: 0x884422, shininess: 80 });
     const shield = new THREE.Mesh(shieldGeo, shieldMat);
     shield.position.set(-0.55, 1.2, 0.1);
     g.add(shield);
 
-    // Gölge yansıması
     const shadowGeo = new THREE.CircleGeometry(0.5, 16);
     const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 });
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
@@ -93,7 +102,6 @@ export class Player {
     shadow.position.y = 0.02;
     g.add(shadow);
 
-    // İsim etiketi
     this._nameTag = this._makeNameTag('Savaşçı');
     this._nameTag.position.y = 2.4;
     g.add(this._nameTag);
@@ -149,7 +157,6 @@ export class Player {
       this.ui.addLog('Yeterli MP yok!', 'system');
       return;
     }
-
     this.mp -= skill.mp;
     skill.timer = skill.cd;
 
@@ -162,13 +169,12 @@ export class Player {
     }
 
     if (skill.aoe) {
-      // AOE saldırı — yakındaki tüm düşmanlara
       this.ui.addLog(`${skill.name} kullanıldı!`, 'combat');
       this._spawnSkillEffect(this.mesh.position, 0xFF8800);
     } else {
       if (!this.target || this.target.dead) {
         this.ui.addLog('Hedef seçilmedi!', 'system');
-        skill.timer = 0; // geri ver
+        skill.timer = 0;
         return;
       }
       const dmg = Math.floor((this.atk + Math.random() * 10) * skill.dmgMult);
@@ -206,11 +212,38 @@ export class Player {
   }
 
   _updateMovement(dt) {
-    // Hedefe doğru otomatik hareket
+    const k = this.keys;
+    const wasdActive = k['KeyW'] || k['KeyS'] || k['KeyA'] || k['KeyD'];
+
+    if (wasdActive) {
+      this.moving = false;
+      this.targetPos = null;
+
+      const camYaw = window.game?.camera?.yaw ?? 0;
+      const forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+      const right   = new THREE.Vector3( Math.cos(camYaw), 0, -Math.sin(camYaw));
+
+      const move = new THREE.Vector3();
+      if (k['KeyW']) move.add(forward);
+      if (k['KeyS']) move.sub(forward);
+      if (k['KeyD']) move.add(right);
+      if (k['KeyA']) move.sub(right);
+
+      if (move.length() > 0) {
+        move.normalize();
+        this.mesh.position.addScaledVector(move, this.moveSpeed * dt);
+        this.mesh.lookAt(
+          this.mesh.position.x + move.x,
+          this.mesh.position.y,
+          this.mesh.position.z + move.z
+        );
+      }
+      return;
+    }
+
     if (this.target && !this.target.dead) {
       const dist = this.mesh.position.distanceTo(this.target.mesh.position);
       if (dist > this.attackRange) {
-        // Hedefe yaklaş
         const dir = new THREE.Vector3().subVectors(this.target.mesh.position, this.mesh.position).normalize();
         this.mesh.position.addScaledVector(dir, this.moveSpeed * dt);
         this.mesh.lookAt(this.target.mesh.position.x, this.mesh.position.y, this.target.mesh.position.z);
@@ -224,10 +257,7 @@ export class Player {
       this.targetPos.z - this.mesh.position.z
     ).length();
 
-    if (dist < 0.2) {
-      this.moving = false;
-      return;
-    }
+    if (dist < 0.2) { this.moving = false; return; }
 
     const dir = new THREE.Vector3(
       this.targetPos.x - this.mesh.position.x, 0,
@@ -243,10 +273,7 @@ export class Player {
   }
 
   _updateCombat(dt) {
-    if (this.attackCooldown > 0) {
-      this.attackCooldown -= dt;
-    }
-
+    if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (!this.target || this.target.dead) return;
     const dist = this.mesh.position.distanceTo(this.target.mesh.position);
     if (dist <= this.attackRange && this.attackCooldown <= 0) {
@@ -260,8 +287,6 @@ export class Player {
     this.target.takeDamage(finalDmg, false);
     this.attackCooldown = 1 / this.attackRate;
     this.ui.addLog(`${finalDmg} hasar verdin.`, 'combat');
-
-    // Kılıç sallamaeffect
     this._swingSword();
   }
 
@@ -281,14 +306,8 @@ export class Player {
   _updateRegen(dt) {
     this.hpRegenTimer += dt;
     this.mpRegenTimer += dt;
-    if (this.hpRegenTimer >= 3) {
-      this.hp = Math.min(this.hpMax, this.hp + 5);
-      this.hpRegenTimer = 0;
-    }
-    if (this.mpRegenTimer >= 2) {
-      this.mp = Math.min(this.mpMax, this.mp + 8);
-      this.mpRegenTimer = 0;
-    }
+    if (this.hpRegenTimer >= 3) { this.hp = Math.min(this.hpMax, this.hp + 5); this.hpRegenTimer = 0; }
+    if (this.mpRegenTimer >= 2) { this.mp = Math.min(this.mpMax, this.mp + 8); this.mpRegenTimer = 0; }
   }
 
   _updateSkillCooldowns(dt) {
@@ -297,24 +316,17 @@ export class Player {
         s.timer = Math.max(0, s.timer - dt);
         const el = document.getElementById('cd-' + i);
         if (el) {
-          if (s.timer > 0) {
-            el.style.display = 'flex';
-            el.textContent = s.timer.toFixed(1);
-          } else {
-            el.style.display = 'none';
-          }
+          if (s.timer > 0) { el.style.display = 'flex'; el.textContent = s.timer.toFixed(1); }
+          else el.style.display = 'none';
         }
       }
     });
   }
 
   _updateAnimation(dt) {
-    // Yürüme animasyonu — gövde sallama
     if (this.moving || (this.target && !this.target.dead)) {
       const t = Date.now() * 0.008;
-      if (this.mesh.children[0]) {
-        this.mesh.children[0].rotation.z = Math.sin(t) * 0.05;
-      }
+      if (this.mesh.children[0]) this.mesh.children[0].rotation.z = Math.sin(t) * 0.05;
     }
   }
 
@@ -352,12 +364,9 @@ export class Player {
     this.exp -= this.expNeeded;
     this.level++;
     this.expNeeded = Math.floor(this.expNeeded * 1.4);
-    this.hpMax += 50;
-    this.mpMax += 20;
-    this.hp = this.hpMax;
-    this.mp = this.mpMax;
-    this.atk += 8;
-    this.def += 4;
+    this.hpMax += 50; this.mpMax += 20;
+    this.hp = this.hpMax; this.mp = this.mpMax;
+    this.atk += 8; this.def += 4;
     this.ui.addLog(`⬆ SEVİYE ${this.level}! Güçlendin!`, 'level');
     this._spawnSkillEffect(this.mesh.position, 0xFFDD00);
   }
@@ -365,8 +374,7 @@ export class Player {
   _onDeath() {
     this.ui.addLog('Öldün! Yeniden doğuyorsun...', 'system');
     setTimeout(() => {
-      this.hp = this.hpMax;
-      this.mp = this.mpMax;
+      this.hp = this.hpMax; this.mp = this.mpMax;
       this.mesh.position.set(0, 0, 0);
       this.target = null;
     }, 3000);
