@@ -170,11 +170,7 @@ export class Game {
   _onKeyDown(e) {
     if (!this.player) return;
     switch(e.code) {
-      case 'KeyQ': this.player.useSkill(0); break;
-      case 'KeyW': this.player.useSkill(1); break;
-      case 'KeyE': this.player.useSkill(2); break;
-      case 'KeyR': this.player.useSkill(3); break;
-      case 'KeyT': this.player.useSkill(4); break;
+      // Skill tuşları Player._setupKeyListeners() içinde (1-5)
     }
   }
 

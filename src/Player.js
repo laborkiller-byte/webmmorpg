@@ -50,9 +50,12 @@ export class Player {
   _setupKeyListeners() {
     document.addEventListener('keydown', e => {
       this.keys[e.code] = true;
+
+      // Sadece 1-5 rakam tuşları skill kullanır
+      // WASD hareket için kullanılır, skill tetiklemez
       const skillMap = {
         'Digit1': 0, 'Digit2': 1, 'Digit3': 2,
-        'Digit4': 3, 'Digit5': 4, 'Digit6': 5,
+        'Digit4': 3, 'Digit5': 4,
       };
       if (skillMap[e.code] !== undefined) {
         this.useSkill(skillMap[e.code]);
