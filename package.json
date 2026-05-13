@@ -1,0 +1,17 @@
+{
+  "name": "metin2-like",
+  "version": "0.1.0",
+  "description": "Metin2 benzeri 3D MMORPG - Three.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.163.0"
+  },
+  "devDependencies": {
+    "vite": "^5.2.0"
+  }
+}
